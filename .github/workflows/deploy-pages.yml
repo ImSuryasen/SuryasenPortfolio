@@ -30,6 +30,7 @@ jobs:
           mkdir -p dist
           cp index.html dist/
           cp site.config.js dist/
+          if [ -f CNAME ]; then cp CNAME dist/; fi
           cp -r css dist/css
           cp -r js dist/js
           cp -r assets dist/assets
