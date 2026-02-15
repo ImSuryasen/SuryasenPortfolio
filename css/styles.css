@@ -354,6 +354,68 @@ body {
   box-shadow: 0 0 20px rgba(114, 165, 255, 0.35);
 }
 
+.portfolio-bot {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 110;
+  display: grid;
+  justify-items: end;
+  gap: 0.55rem;
+}
+
+.portfolio-bot-toggle {
+  min-width: 116px;
+}
+
+.portfolio-bot-panel {
+  width: min(360px, calc(100vw - 2rem));
+  padding: 0.85rem;
+  background: var(--panel);
+}
+
+.portfolio-bot-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.92rem;
+  color: var(--text-dim);
+}
+
+.portfolio-bot-messages {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.portfolio-bot-message {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  line-height: 1.45;
+  font-size: 0.86rem;
+  white-space: pre-wrap;
+}
+
+.portfolio-bot-message.user {
+  background: rgba(114, 165, 255, 0.14);
+}
+
+.portfolio-bot-message.assistant {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.portfolio-bot-form {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr auto;
+}
+
+.portfolio-bot-form input[type="text"] {
+  margin: 0;
+}
+
 .section-title {
   font-family: "Bodoni MT", Didot, "Times New Roman", serif;
   letter-spacing: 0.05em;
@@ -1107,6 +1169,19 @@ input[type="file"] {
 
   .exp-edit-actions-right {
     justify-content: flex-end;
+  }
+
+  .portfolio-bot {
+    right: 0.7rem;
+    bottom: 0.7rem;
+  }
+
+  .portfolio-bot-panel {
+    width: min(340px, calc(100vw - 1.4rem));
+  }
+
+  .portfolio-bot-form {
+    grid-template-columns: 1fr;
   }
 }
 

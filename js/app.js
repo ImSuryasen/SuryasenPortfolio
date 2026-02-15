@@ -35,6 +35,232 @@ let hobbiesCache = [];
 let currentProjectSort = "stars";
 let dragState = null;
 let experienceSyncStatus = null;
+let portfolioBotIndex = [];
+let portfolioBotIndexPromise = null;
+
+function normalizeBotText(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function plainTextFromHtml(html = "") {
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+  return (template.content.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function addBotDoc(docs, section, title, text) {
+  const cleanText = String(text || "").replace(/\s+/g, " ").trim();
+  if (!cleanText) return;
+  docs.push({
+    section,
+    title,
+    text: cleanText,
+    searchable: normalizeBotText(`${title} ${cleanText}`)
+  });
+}
+
+async function buildPortfolioBotIndex() {
+  const docs = [];
+
+  addBotDoc(
+    docs,
+    "Home",
+    "Profile",
+    `${siteConfig.name}. ${siteConfig.tagline}. Resume: ${siteConfig.resumeUrl}. Social links: ${Object.entries(
+      siteConfig.socials || {}
+    )
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(" | ")}`
+  );
+
+  try {
+    const about = await getAboutProfile();
+    addBotDoc(
+      docs,
+      "About",
+      "About summary",
+      `${plainTextFromHtml(about.contentHtml || "")} Highlights: ${(about.highlights || []).join(", ")}`
+    );
+  } catch {
+    // ignore and continue indexing other sections
+  }
+
+  try {
+    const payload = await getEditableLinkedinPayload(siteConfig.socials.linkedin || "");
+    (payload.experiences || []).forEach((exp) => {
+      addBotDoc(
+        docs,
+        "Experience",
+        `${exp.role || "Role"} at ${exp.company || "Organization"}`,
+        `${exp.role || ""} at ${exp.company || ""}. ${exp.employmentType || ""}. ${exp.location || ""} ${exp.locationType || ""}. ${exp.start || ""} to ${exp.end || ""}. ${exp.description || ""}. Skills: ${(exp.skills || []).join(", ")}`
+      );
+    });
+  } catch {
+    // ignore and continue indexing other sections
+  }
+
+  try {
+    const projectsResult = await getEditableProjects(siteConfig.githubUsername, "updated");
+    (projectsResult.projects || []).forEach((project) => {
+      addBotDoc(
+        docs,
+        "Projects",
+        project.name || "Project",
+        `${project.description || ""}. Language: ${project.language || "Unknown"}. Tech: ${(project.techStacks || []).join(", ")}. Stars: ${project.stargazers_count || 0}. Updated: ${project.updated_at || ""}. Link: ${project.html_url || ""}`
+      );
+    });
+  } catch {
+    // ignore and continue indexing other sections
+  }
+
+  try {
+    const skills = await getEditableSkills();
+    (skills || []).forEach((group) => {
+      const skillText = (group.items || []).map((item) => `${item.name} (${item.level || 0}%)`).join(", ");
+      addBotDoc(docs, "Skills", group.category || "Skills", skillText);
+    });
+  } catch {
+    // ignore and continue indexing other sections
+  }
+
+  (hobbiesCache || []).forEach((hobby) => {
+    const captions = (hobby.gallery || []).map((img) => img.caption).filter(Boolean).join(", ");
+    addBotDoc(
+      docs,
+      "Hobbies",
+      hobby.name || "Hobby",
+      `${hobby.description || ""}. Gallery captions: ${captions}`
+    );
+  });
+
+  return docs;
+}
+
+async function ensurePortfolioBotIndex(force = false) {
+  if (force) {
+    portfolioBotIndexPromise = null;
+  }
+
+  if (!portfolioBotIndexPromise) {
+    portfolioBotIndexPromise = buildPortfolioBotIndex()
+      .then((docs) => {
+        portfolioBotIndex = docs;
+        return docs;
+      })
+      .catch(() => {
+        portfolioBotIndex = [];
+        return [];
+      })
+      .finally(() => {
+        portfolioBotIndexPromise = null;
+      });
+  }
+
+  return portfolioBotIndexPromise;
+}
+
+function makeBotSnippet(doc, terms) {
+  const text = String(doc.text || "");
+  if (!text) return "";
+
+  const lower = text.toLowerCase();
+  const matchedTerm = terms.find((term) => lower.includes(term));
+  const start = matchedTerm ? Math.max(0, lower.indexOf(matchedTerm) - 48) : 0;
+  const snippet = text.slice(start, start + 180).trim();
+  return start > 0 ? `…${snippet}` : snippet;
+}
+
+function answerPortfolioQuestion(question) {
+  const normalized = normalizeBotText(question);
+  if (!normalized) {
+    return "I can help with that — try a specific question about your portfolio, like your skills, projects, experience, or hobbies.";
+  }
+
+  const terms = normalized.split(" ").filter((token) => token.length >= 2);
+  if (!terms.length) {
+    return "Could you add a few more words? That helps me find the right detail from your portfolio.";
+  }
+
+  const scored = portfolioBotIndex
+    .map((doc) => {
+      let score = 0;
+      terms.forEach((term) => {
+        if (doc.searchable.includes(term)) score += 1;
+      });
+      if (normalizeBotText(doc.title).includes(normalized)) score += 3;
+      return { doc, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) {
+    return "I only answer from your portfolio content, and I couldn’t find a matching detail for that question yet.";
+  }
+
+  const top = scored.slice(0, 3);
+  const lines = top.map(({ doc }) => `• In ${doc.section}, ${doc.title}: ${makeBotSnippet(doc, terms)}`);
+  return `Great question — here’s what I found in your portfolio:\n${lines.join("\n")}`;
+}
+
+function appendPortfolioBotMessage(container, role, text) {
+  const message = document.createElement("p");
+  message.className = `portfolio-bot-message ${role}`;
+  message.textContent = text;
+  container.appendChild(message);
+  container.scrollTop = container.scrollHeight;
+  return message;
+}
+
+function setupPortfolioBot() {
+  const root = document.getElementById("portfolio-bot");
+  const toggle = document.getElementById("portfolio-bot-toggle");
+  const panel = document.getElementById("portfolio-bot-panel");
+  const messages = document.getElementById("portfolio-bot-messages");
+  const form = document.getElementById("portfolio-bot-form");
+  const input = document.getElementById("portfolio-bot-input");
+
+  if (!root || !toggle || !panel || !messages || !form || !input) return;
+
+  appendPortfolioBotMessage(
+    messages,
+    "assistant",
+    "Hi! I’m your portfolio bot. I answer only using details already available in your portfolio pages."
+  );
+
+  ensurePortfolioBotIndex(true).then((docs) => {
+    appendPortfolioBotMessage(messages, "assistant", `I’ve indexed ${docs.length} portfolio details. Ask me anything about your work, skills, projects, or experience.`);
+  });
+
+  toggle.addEventListener("click", () => {
+    const isHidden = panel.hasAttribute("hidden");
+    if (isHidden) {
+      panel.removeAttribute("hidden");
+      toggle.setAttribute("aria-expanded", "true");
+      input.focus();
+      return;
+    }
+
+    panel.setAttribute("hidden", "");
+    toggle.setAttribute("aria-expanded", "false");
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const question = String(input.value || "").trim();
+    if (!question) return;
+
+    appendPortfolioBotMessage(messages, "user", question);
+    input.value = "";
+
+    const pending = appendPortfolioBotMessage(messages, "assistant", "Searching portfolio details...");
+    await ensurePortfolioBotIndex();
+    pending.textContent = answerPortfolioQuestion(question);
+  });
+}
 
 const reduceMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -1325,7 +1551,10 @@ async function renderRoute() {
     setupFallbackTransition(container);
   }
 
-  if (route.page === "experience") {
+  if (route.page === "home") {
+    container.innerHTML = pageTemplate("home");
+    setupPortfolioBot();
+  } else if (route.page === "experience") {
     const payload = await getEditableLinkedinPayload(siteConfig.socials.linkedin || "");
     container.innerHTML = pageTemplate("experience", {
       experienceHtml: experienceHtmlFromPayload(payload),

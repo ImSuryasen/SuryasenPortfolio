@@ -85,6 +85,19 @@ export function pageTemplate(page, state = {}) {
             </div>
           </div>
         </div>
+        <section id="portfolio-bot" class="portfolio-bot" aria-label="Portfolio bot">
+          <button id="portfolio-bot-toggle" class="portfolio-bot-toggle hero-cta" type="button" aria-expanded="false" aria-controls="portfolio-bot-panel">
+            Ask Bot
+          </button>
+          <div id="portfolio-bot-panel" class="portfolio-bot-panel panel" hidden>
+            <p class="portfolio-bot-title">Ask about this portfolio</p>
+            <div id="portfolio-bot-messages" class="portfolio-bot-messages" aria-live="polite"></div>
+            <form id="portfolio-bot-form" class="portfolio-bot-form">
+              <input id="portfolio-bot-input" type="text" placeholder="Ask anything from this portfolio..." autocomplete="off" />
+              <button class="btn primary" type="submit">Ask</button>
+            </form>
+          </div>
+        </section>
       </section>
     `;
   }
