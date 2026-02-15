@@ -60,6 +60,25 @@ function setupThemeToggle() {
   });
 }
 
+function applySiteFavicon(imageUrl = "") {
+  const source = String(imageUrl || "").trim() || "./assets/favicon.svg";
+  const href = `${source}${source.includes("?") ? "&" : "?"}v=${Date.now()}`;
+
+  const ensureLink = (rel) => {
+    let link = document.querySelector(`link[rel='${rel}']`);
+    if (!(link instanceof HTMLLinkElement)) {
+      link = document.createElement("link");
+      link.rel = rel;
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  };
+
+  ensureLink("icon");
+  ensureLink("shortcut icon");
+  ensureLink("apple-touch-icon");
+}
+
 function setupMobileMenu() {
   const toggle = document.getElementById("menu-toggle");
   const mobileNav = document.getElementById("mobile-nav");
@@ -654,7 +673,7 @@ async function openAboutEditor() {
     if (!(form instanceof HTMLFormElement) || !(editor instanceof HTMLElement)) return;
 
     const formData = new FormData(form);
-    await saveAboutProfile({
+    const savedAbout = await saveAboutProfile({
       imageUrl: String(formData.get("imageUrl") || "").trim(),
       contentHtml: editor.innerHTML,
       highlights: String(formData.get("highlights") || "")
@@ -662,6 +681,8 @@ async function openAboutEditor() {
         .map((item) => item.trim())
         .filter(Boolean)
     });
+
+    applySiteFavicon(savedAbout.imageUrl || "");
 
     close();
     await renderRoute();
@@ -1357,6 +1378,9 @@ function setupReducedMotionHotkey() {
 
 async function init() {
   document.documentElement.setAttribute("data-theme", getPrefTheme());
+
+  const startupAbout = await getAboutProfile();
+  applySiteFavicon(startupAbout.imageUrl || "");
 
   buildRouteLinks();
   buildSocialRow({ socials: siteConfig.socials, resumeUrl: siteConfig.resumeUrl });
