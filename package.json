@@ -1,0 +1,15 @@
+{
+  "name": "suryasen-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run frontend\" \"npm run backend\"",
+    "frontend": "http-server . -p 5500 -c-1",
+    "backend": "npm --prefix backend start",
+    "install:all": "npm install && npm --prefix backend install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "http-server": "^14.1.1"
+  }
+}

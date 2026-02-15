@@ -1,0 +1,28 @@
+{
+  "profileUrl": "https://www.linkedin.com/in/imsuryasen",
+  "fullName": "SURYASEN",
+  "experiences": [
+    {
+      "id": "exp_builder_labs",
+      "company": "Builder Labs",
+      "role": "Frontend Engineer",
+      "location": "Remote",
+      "start": "2024-01",
+      "end": "Present",
+      "logoUrl": "https://cdn.simpleicons.org/linkedin/0A66C2",
+      "description": "Designed and implemented animated, accessible SPA interfaces using vanilla JavaScript and CSS.",
+      "skills": ["JavaScript", "CSS", "Accessibility", "Performance"]
+    },
+    {
+      "id": "exp_creative_stack",
+      "company": "Creative Stack",
+      "role": "UI Developer",
+      "location": "India",
+      "start": "2022-06",
+      "end": "2023-12",
+      "logoUrl": "https://cdn.simpleicons.org/github/181717",
+      "description": "Built responsive web interfaces and production-ready component systems with strong motion language.",
+      "skills": ["HTML", "CSS", "Design Systems"]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="SURYASEN portfolio" />
+    <title>SURYASEN | Portfolio</title>
+    <link rel="preconnect" href="https://cdn.simpleicons.org" />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="stylesheet" href="./css/animations.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <div id="scroll-progress" aria-hidden="true"></div>
+
+    <header id="hero-header" class="hero-header glass">
+      <div class="brand" aria-label="Brand">SURYASEN</div>
+
+      <button
+        id="menu-toggle"
+        class="menu-toggle"
+        aria-label="Toggle navigation"
+        aria-expanded="false"
+        aria-controls="mobile-nav"
+      >
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="top-nav" aria-label="Primary">
+        <div id="route-links" class="route-links" aria-label="Page links"></div>
+        <div id="social-row" class="social-row" aria-label="Social links"></div>
+      </nav>
+    </header>
+
+    <nav id="mobile-nav" class="mobile-nav glass" aria-label="Mobile"></nav>
+
+    <main id="main-content" class="app-shell" tabindex="-1">
+      <div id="route-container" class="route-container"></div>
+    </main>
+
+    <div id="linkedin-modal-root"></div>
+    <div id="lightbox-root"></div>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
