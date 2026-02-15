@@ -11,7 +11,7 @@ function fallbackSkillSvg(name) {
 
 export function socialIconMap() {
   return {
-    linkedin: "https://cdn.simpleicons.org/linkedin/ffffff",
+    linkedin: "./assets/linkedin.svg",
     github: "https://cdn.simpleicons.org/github/ffffff",
     instagram: "https://cdn.simpleicons.org/instagram/ffffff",
     twitter: "https://cdn.simpleicons.org/x/ffffff",
