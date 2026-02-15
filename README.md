@@ -8,6 +8,38 @@ A modern, animated, responsive static portfolio built with:
 No backend, no database server, no build tools, no API keys.
 Persistence is handled via LocalStorage + IndexedDB only.
 
+## Cross-device persistence via GitHub sync
+
+This project now supports optional GitHub-based sync for editable content.
+
+When enabled, the app:
+- pulls `data/user-content.json` from your GitHub repo on startup,
+- stores that data locally (IndexedDB + LocalStorage fallback),
+- auto-pushes new edits (including uploaded images saved as Data URLs) back to the same file.
+
+### Configure
+
+In `site.config.js`, verify:
+- `githubSync.enabled = true`
+- `githubSync.owner`
+- `githubSync.repo`
+- `githubSync.branch`
+- `githubSync.path` (default: `data/user-content.json`)
+
+### Token setup (required for write sync)
+
+GitHub write sync needs a Personal Access Token with repository write access.
+
+Recommended:
+1. Generate a fine-grained token for only this repo.
+2. In browser console on your deployed site, set it once:
+  - `localStorage.setItem("portfolio.githubSyncToken", "YOUR_TOKEN")`
+3. Refresh the site.
+
+Notes:
+- Do not commit a real token into `site.config.js` in a public repo.
+- If no token is present, read/pull still works for public repos, but write sync is skipped.
+
 ## Run locally
 
 1. Open `index.html` directly in a modern browser.

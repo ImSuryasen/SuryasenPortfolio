@@ -16,6 +16,15 @@ const siteConfig = {
     backendBaseUrl: "http://localhost:8787",
     scope: ""
   },
+  githubSync: {
+    enabled: true,
+    owner: "ImSuryasen",
+    repo: "SuryasenPortfolio",
+    branch: "main",
+    path: "data/user-content.json",
+    tokenStorageKey: "portfolio.githubSyncToken",
+    token: ""
+  },
   skills: [
     {
       category: "Languages/Frameworks",

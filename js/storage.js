@@ -9,6 +9,8 @@ const LS_KEYS = {
 const DB_NAME = "portfolioDB";
 const DB_VERSION = 1;
 let dbInstancePromise;
+let idbWriteListener = null;
+let isIdbWriteListenerMuted = false;
 
 function openDb() {
   if (dbInstancePromise) return dbInstancePromise;
@@ -56,9 +58,31 @@ export async function idbSet(storeName, value) {
   const store = await tx(storeName, "readwrite");
   return new Promise((resolve, reject) => {
     const req = store.put(value);
-    req.onsuccess = () => resolve(value);
+    req.onsuccess = () => {
+      if (!isIdbWriteListenerMuted && typeof idbWriteListener === "function") {
+        try {
+          idbWriteListener({ storeName, value });
+        } catch {
+          // ignore listener errors to keep storage writes resilient
+        }
+      }
+      resolve(value);
+    };
     req.onerror = () => reject(req.error);
   });
+}
+
+export function setIdbWriteListener(listener) {
+  idbWriteListener = typeof listener === "function" ? listener : null;
+}
+
+export async function runWithoutIdbWriteListener(task) {
+  isIdbWriteListenerMuted = true;
+  try {
+    return await task();
+  } finally {
+    isIdbWriteListenerMuted = false;
+  }
 }
 
 export const storage = {
@@ -116,6 +140,65 @@ export function getIconCache() {
 
 export function setIconCache(cache) {
   storage.set(LS_KEYS.ICON_URLS, cache);
+}
+
+const FALLBACK_LS_MAP = {
+  aboutProfile: "portfolio.aboutProfile",
+  skillsProfile: "portfolio.skillsProfile",
+  projectsProfile: "portfolio.projectsProfile",
+  linkedinTimeline: "portfolio.linkedinTimeline"
+};
+
+export async function exportEditableDataSnapshot() {
+  const [profile, linkedin, hobbies] = await Promise.all([
+    idbGetAll("profile"),
+    idbGetAll("linkedin"),
+    idbGetAll("hobbies")
+  ]);
+
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    profile,
+    linkedin,
+    hobbies
+  };
+}
+
+export async function importEditableDataSnapshot(snapshot) {
+  const next = snapshot && typeof snapshot === "object" ? snapshot : null;
+  if (!next) return false;
+
+  const profileRows = Array.isArray(next.profile) ? next.profile : [];
+  const linkedinRows = Array.isArray(next.linkedin) ? next.linkedin : [];
+  const hobbyRows = Array.isArray(next.hobbies) ? next.hobbies : [];
+
+  await runWithoutIdbWriteListener(async () => {
+    for (const row of profileRows) {
+      if (!row || typeof row !== "object") continue;
+      await idbSet("profile", row);
+
+      const localStorageKey = FALLBACK_LS_MAP[String(row.key || "")];
+      if (localStorageKey && row.value !== undefined) {
+        storage.set(localStorageKey, row.value);
+      }
+    }
+
+    for (const row of linkedinRows) {
+      if (!row || typeof row !== "object") continue;
+      await idbSet("linkedin", row);
+      if (String(row.key || "") === "timeline" && row.value !== undefined) {
+        storage.set(FALLBACK_LS_MAP.linkedinTimeline, row.value);
+      }
+    }
+
+    for (const row of hobbyRows) {
+      if (!row || typeof row !== "object") continue;
+      await idbSet("hobbies", row);
+    }
+  });
+
+  return true;
 }
 
 export { LS_KEYS };

@@ -29,6 +29,7 @@ import {
 } from "./ui.js";
 import { startLinkedinOAuth, handleLinkedinOAuthCallback, getSyncConfig } from "./linkedin-sync.js";
 import { getAboutProfile, saveAboutProfile } from "./profile.js";
+import { setupGithubSync, setGithubSyncToken, forceGithubSync } from "./github-sync.js";
 
 let hobbiesCache = [];
 let currentProjectSort = "stars";
@@ -1364,6 +1365,19 @@ async function init() {
   setTheme(getPrefTheme());
   setupMobileMenu();
 
+  if (siteConfig.githubSync?.enabled) {
+    const tokenFromConfig = String(siteConfig.githubSync?.token || "").trim();
+    if (tokenFromConfig) {
+      setGithubSyncToken(tokenFromConfig);
+    }
+
+    try {
+      await setupGithubSync(siteConfig.githubSync);
+    } catch {
+      // continue with local persistence even if GitHub sync setup fails
+    }
+  }
+
   hobbiesCache = await ensureHobbies(siteConfig.hobbies);
 
   setupScrollProgress();
@@ -1382,6 +1396,14 @@ async function init() {
   }
 
   await renderRoute();
+
+  if (siteConfig.githubSync?.enabled && siteConfig.githubSync?.token) {
+    try {
+      await forceGithubSync("initial-bootstrap");
+    } catch {
+      // keep UX uninterrupted; next edits retry sync automatically
+    }
+  }
 }
 
 init();
