@@ -37,6 +37,7 @@ let dragState = null;
 let experienceSyncStatus = null;
 let portfolioBotIndex = [];
 let portfolioBotIndexPromise = null;
+let portfolioBotContext = null;
 
 function normalizeBotText(value = "") {
   return String(value || "")
@@ -63,8 +64,25 @@ function addBotDoc(docs, section, title, text) {
   });
 }
 
-async function buildPortfolioBotIndex() {
+function createEmptyBotContext() {
+  return {
+    home: {
+      name: siteConfig.name,
+      tagline: siteConfig.tagline,
+      resumeUrl: siteConfig.resumeUrl,
+      socials: siteConfig.socials || {}
+    },
+    about: null,
+    skills: [],
+    projects: [],
+    experiences: [],
+    hobbies: []
+  };
+}
+
+async function buildPortfolioBotKnowledge() {
   const docs = [];
+  const context = createEmptyBotContext();
 
   addBotDoc(
     docs,
@@ -79,11 +97,15 @@ async function buildPortfolioBotIndex() {
 
   try {
     const about = await getAboutProfile();
+    context.about = {
+      content: plainTextFromHtml(about.contentHtml || ""),
+      highlights: Array.isArray(about.highlights) ? about.highlights : []
+    };
     addBotDoc(
       docs,
       "About",
       "About summary",
-      `${plainTextFromHtml(about.contentHtml || "")} Highlights: ${(about.highlights || []).join(", ")}`
+      `${context.about.content} Highlights: ${context.about.highlights.join(", ")}`
     );
   } catch {
     // ignore and continue indexing other sections
@@ -91,6 +113,7 @@ async function buildPortfolioBotIndex() {
 
   try {
     const payload = await getEditableLinkedinPayload(siteConfig.socials.linkedin || "");
+    context.experiences = Array.isArray(payload.experiences) ? payload.experiences : [];
     (payload.experiences || []).forEach((exp) => {
       addBotDoc(
         docs,
@@ -105,6 +128,7 @@ async function buildPortfolioBotIndex() {
 
   try {
     const projectsResult = await getEditableProjects(siteConfig.githubUsername, "updated");
+    context.projects = Array.isArray(projectsResult.projects) ? projectsResult.projects : [];
     (projectsResult.projects || []).forEach((project) => {
       addBotDoc(
         docs,
@@ -119,6 +143,7 @@ async function buildPortfolioBotIndex() {
 
   try {
     const skills = await getEditableSkills();
+    context.skills = Array.isArray(skills) ? skills : [];
     (skills || []).forEach((group) => {
       const skillText = (group.items || []).map((item) => `${item.name} (${item.level || 0}%)`).join(", ");
       addBotDoc(docs, "Skills", group.category || "Skills", skillText);
@@ -128,6 +153,7 @@ async function buildPortfolioBotIndex() {
   }
 
   (hobbiesCache || []).forEach((hobby) => {
+    context.hobbies.push(hobby);
     const captions = (hobby.gallery || []).map((img) => img.caption).filter(Boolean).join(", ");
     addBotDoc(
       docs,
@@ -137,23 +163,25 @@ async function buildPortfolioBotIndex() {
     );
   });
 
-  return docs;
+  return { docs, context };
 }
 
-async function ensurePortfolioBotIndex(force = false) {
+async function ensurePortfolioBotKnowledge(force = false) {
   if (force) {
     portfolioBotIndexPromise = null;
   }
 
   if (!portfolioBotIndexPromise) {
-    portfolioBotIndexPromise = buildPortfolioBotIndex()
-      .then((docs) => {
-        portfolioBotIndex = docs;
-        return docs;
+    portfolioBotIndexPromise = buildPortfolioBotKnowledge()
+      .then((knowledge) => {
+        portfolioBotIndex = knowledge.docs;
+        portfolioBotContext = knowledge.context;
+        return knowledge;
       })
       .catch(() => {
         portfolioBotIndex = [];
-        return [];
+        portfolioBotContext = createEmptyBotContext();
+        return { docs: [], context: portfolioBotContext };
       })
       .finally(() => {
         portfolioBotIndexPromise = null;
@@ -161,6 +189,157 @@ async function ensurePortfolioBotIndex(force = false) {
   }
 
   return portfolioBotIndexPromise;
+}
+
+function flattenSkills(groups = []) {
+  return groups.flatMap((group) =>
+    (group.items || []).map((item) => ({
+      category: group.category || "Skills",
+      name: String(item.name || "").trim(),
+      level: Number(item.level || 0)
+    }))
+  );
+}
+
+function formatSection(title, lines = []) {
+  return [`## ${title}`, ...lines].join("\n");
+}
+
+function includesAny(text, words) {
+  return words.some((word) => text.includes(word));
+}
+
+function isListIntent(text) {
+  return includesAny(text, ["list", "all", "show", "display", "what are", "which are"]);
+}
+
+function findMentionedSkill(text, skills = []) {
+  const normalizedText = ` ${text} `;
+  return skills.find((skill) => {
+    const normalizedName = normalizeBotText(skill.name);
+    if (!normalizedName) return false;
+    return normalizedText.includes(` ${normalizedName} `) || normalizedText.includes(normalizedName);
+  });
+}
+
+function formatSkillsList(skills = []) {
+  const grouped = new Map();
+  skills.forEach((skill) => {
+    if (!grouped.has(skill.category)) grouped.set(skill.category, []);
+    grouped.get(skill.category).push(skill);
+  });
+
+  const sections = Array.from(grouped.entries()).map(([category, items]) => {
+    const lines = items
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((item) => `- ${item.name} — ${item.level}%`)
+      .join("\n");
+    return formatSection(category, [lines]);
+  });
+
+  return [
+    `Great question — here are all skills from your Skills section (${skills.length} total).`,
+    "",
+    ...sections
+  ].join("\n\n");
+}
+
+function formatProjectsList(projects = []) {
+  const lines = projects
+    .map((project) => {
+      const stars = Number(project.stargazers_count || 0);
+      const language = project.language || "Unknown";
+      return `- ${project.name || "Untitled Project"} — ${language}, ★${stars}`;
+    })
+    ;
+
+  return [
+    `Great question — here are your projects (${projects.length} total).`,
+    "",
+    formatSection("Projects", lines)
+  ].join("\n");
+}
+
+function formatExperienceList(experiences = []) {
+  const lines = experiences
+    .map((exp) => {
+      const role = exp.role || "Role";
+      const company = exp.company || "Organization";
+      const duration = [exp.start, exp.end].filter(Boolean).join(" to ");
+      return `- ${role} at ${company}${duration ? ` (${duration})` : ""}`;
+    })
+    ;
+
+  return [
+    `Great question — here is your experience timeline (${experiences.length} roles).`,
+    "",
+    formatSection("Experience", lines)
+  ].join("\n");
+}
+
+function formatHobbiesList(hobbies = []) {
+  const lines = hobbies.map((hobby) => `- ${hobby.name}${hobby.description ? ` — ${hobby.description}` : ""}`);
+  return [
+    `Great question — here are your hobbies (${hobbies.length} total).`,
+    "",
+    formatSection("Hobbies", lines)
+  ].join("\n");
+}
+
+function answerUsingStructuredContext(question) {
+  const normalized = normalizeBotText(question);
+  const context = portfolioBotContext || createEmptyBotContext();
+  const skills = flattenSkills(context.skills || []);
+
+  const asksSkills = includesAny(normalized, ["skill", "skills", "proficiency", "profeciency", "level"]);
+  const asksProjects = includesAny(normalized, ["project", "projects", "repo", "repositories"]);
+  const asksExperience = includesAny(normalized, ["experience", "work", "role", "roles", "job", "jobs"]);
+  const asksHobbies = includesAny(normalized, ["hobby", "hobbies"]);
+  const asksAbout = includesAny(normalized, ["about", "summary", "bio", "introduction"]);
+
+  if (asksSkills) {
+    const skill = findMentionedSkill(normalized, skills);
+    if (skill && includesAny(normalized, ["proficiency", "profeciency", "level", "percent", "%", "how much"])) {
+      return [
+        "Great question — here is the exact value from your Skills section.",
+        "",
+        formatSection("Skill Proficiency", [`- ${skill.name}: ${skill.level}%`, `- Category: ${skill.category}`])
+      ].join("\n");
+    }
+    if (isListIntent(normalized) || normalized.includes("skills")) {
+      if (!skills.length) return "I could not find any skills in your Skills section yet.";
+      return formatSkillsList(skills);
+    }
+  }
+
+  if (asksProjects && (isListIntent(normalized) || normalized.includes("projects"))) {
+    const projects = context.projects || [];
+    if (!projects.length) return "I could not find any projects in your Projects section yet.";
+    return formatProjectsList(projects);
+  }
+
+  if (asksExperience && (isListIntent(normalized) || normalized.includes("experience") || normalized.includes("roles"))) {
+    const experiences = context.experiences || [];
+    if (!experiences.length) return "I could not find any experience entries in your Experience section yet.";
+    return formatExperienceList(experiences);
+  }
+
+  if (asksHobbies && (isListIntent(normalized) || normalized.includes("hobbies"))) {
+    const hobbies = context.hobbies || [];
+    if (!hobbies.length) return "I could not find hobbies in your Hobbies section yet.";
+    return formatHobbiesList(hobbies);
+  }
+
+  if (asksAbout) {
+    const about = context.about;
+    if (!about) return "I could not find About section details yet.";
+    const highlights = about.highlights?.length ? `\nHighlights: ${about.highlights.join(", ")}` : "";
+    const aboutLines = [about.content || "No summary available."];
+    if (highlights) aboutLines.push(`Highlights: ${about.highlights.join(", ")}`);
+    return ["Great question — here is your About summary.", "", formatSection("About", aboutLines)].join("\n");
+  }
+
+  return "";
 }
 
 function makeBotSnippet(doc, terms) {
@@ -185,6 +364,9 @@ function answerPortfolioQuestion(question) {
     return "Could you add a few more words? That helps me find the right detail from your portfolio.";
   }
 
+  const structuredAnswer = answerUsingStructuredContext(question);
+  if (structuredAnswer) return structuredAnswer;
+
   const scored = portfolioBotIndex
     .map((doc) => {
       let score = 0;
@@ -201,9 +383,13 @@ function answerPortfolioQuestion(question) {
     return "I only answer from your portfolio content, and I couldn’t find a matching detail for that question yet.";
   }
 
-  const top = scored.slice(0, 3);
-  const lines = top.map(({ doc }) => `• In ${doc.section}, ${doc.title}: ${makeBotSnippet(doc, terms)}`);
-  return `Great question — here’s what I found in your portfolio:\n${lines.join("\n")}`;
+  const top = scored.slice(0, 4);
+  const lines = top.map(({ doc }) => `- ${doc.section} → ${doc.title}\n  ${makeBotSnippet(doc, terms)}`);
+  return [
+    "Great question — here’s what I found across your portfolio pages.",
+    "",
+    formatSection("Matches", lines)
+  ].join("\n");
 }
 
 function appendPortfolioBotMessage(container, role, text) {
@@ -231,8 +417,14 @@ function setupPortfolioBot() {
     "Hi! I’m your portfolio bot. I answer only using details already available in your portfolio pages."
   );
 
-  ensurePortfolioBotIndex(true).then((docs) => {
-    appendPortfolioBotMessage(messages, "assistant", `I’ve indexed ${docs.length} portfolio details. Ask me anything about your work, skills, projects, or experience.`);
+  ensurePortfolioBotKnowledge(true).then((knowledge) => {
+    const skillCount = flattenSkills(knowledge.context.skills || []).length;
+    const projectCount = (knowledge.context.projects || []).length;
+    appendPortfolioBotMessage(
+      messages,
+      "assistant",
+      `I’ve indexed your portfolio (${skillCount} skills, ${projectCount} projects, plus experience/about/hobbies). Ask me for exact lists or specific proficiency levels.`
+    );
   });
 
   toggle.addEventListener("click", () => {
@@ -257,7 +449,7 @@ function setupPortfolioBot() {
     input.value = "";
 
     const pending = appendPortfolioBotMessage(messages, "assistant", "Searching portfolio details...");
-    await ensurePortfolioBotIndex();
+    await ensurePortfolioBotKnowledge();
     pending.textContent = answerPortfolioQuestion(question);
   });
 }
